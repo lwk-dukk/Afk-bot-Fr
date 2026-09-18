@@ -1223,7 +1223,19 @@ function createBot() {
       checkTimeoutInterval: 600000,
     });
 
-    bot.loadPlugin(pathfinder);
+   bot.loadPlugin(pathfinder);
+
+bot.on("path_update", (result) => {
+  addLog(`[Pathfinder] ${result.status}`);
+});
+
+bot.on("goal_reached", () => {
+  addLog("[Pathfinder] Goal reached");
+});
+
+bot.on("path_reset", (reason) => {
+  addLog(`[Pathfinder] Path reset: ${reason}`);
+});
 
     // FIX: connection timeout - end the old bot before reconnecting to avoid ghost bots
     clearBotTimeouts();
