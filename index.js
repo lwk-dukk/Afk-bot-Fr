@@ -3,7 +3,7 @@
 const { addLog, getLogs } = require("./logger");
 const mineflayer = require("mineflayer");
 const { Movements, pathfinder, goals } = require("mineflayer-pathfinder");
-const { GoalBlock } = goals;
+const { GoalBlock, GoalNear } = goals;
 const config = require("./settings.json");
 const express = require("express");
 const http = require("http");
@@ -1464,64 +1464,8 @@ function initializeModules(bot, mcData, defaultMove) {
       });
     }
   }
-// ---------- RANDOM AFK MOVEMENT ----------
-if (
-  config.movement &&
-  config.movement.enabled &&
-  config.movement["circle-walk"] &&
-  config.movement["circle-walk"].enabled
-) {
-  const movement = config.movement["circle-walk"];
-  let movementBusy = false;
 
-  const walkRandomly = async () => {
-    if (!bot || !botState.connected || movementBusy) return;
-
-    movementBusy = true;
-
-    try {
-      const origin = bot.entity.position.clone();
-      const radius = Number(movement.radius) || 4;
-
-      // Pick a random point within the configured radius
-      const angle = Math.random() * Math.PI * 2;
-      const distance = 1 + Math.random() * radius;
-
-      const targetX = Math.floor(origin.x + Math.cos(angle) * distance);
-      const targetZ = Math.floor(origin.z + Math.sin(angle) * distance);
-
-      bot.pathfinder.setMovements(defaultMove);
-      bot.pathfinder.setGoal(
-        new GoalBlock(targetX, Math.floor(origin.y), targetZ)
-      );
-
-      addLog(
-        `[Movement] Walking to ${targetX}, ${Math.floor(origin.y)}, ${targetZ}`
-      );
-
-      // Let the bot walk for a while before choosing another point
-      const walkTime = 3000 + Math.random() * 5000;
-
-      setTimeout(() => {
-        movementBusy = false;
-      }, walkTime);
-    } catch (e) {
-      movementBusy = false;
-      addLog(`[Movement] Error: ${e.message}`);
-    }
-  };
-
-  // Start shortly after spawning
-  setTimeout(walkRandomly, 3000);
-
-  // Pick a new destination periodically
-  addInterval(
-    walkRandomly,
-    Math.max(5000, Number(movement.speed) || 8000)
-  );
-
-  addLog("[Movement] Random AFK movement enabled.");
-}
+  
   // ---------- MOVE TO POSITION ----------
   // FIX: only use position goal if circle-walk is NOT enabled (they fight over pathfinder)
   if (
@@ -1690,34 +1634,40 @@ if (
 // MOVEMENT HELPERS
 // ============================================================
 function startCircleWalk(bot, defaultMove) {
-  const radius = config.movement["circle-walk"].radius;
-  let angle = 0;
-  let lastPathTime = 0;
+  const movement = config.movement["circle-walk"];
+  const radius = Number(movement.radius) || 4;
+  const interval = Math.max(3000, Number(movement.speed) || 8000);
 
   addInterval(() => {
-    if (!bot || !botState.connected) return;
-    const now = Date.now();
-    if (now - lastPathTime < 2000) return;
-    lastPathTime = now;
-    try {
-      const x = bot.entity.position.x + Math.cos(angle) * radius;
-      const z = bot.entity.position.z + Math.sin(angle) * radius;
-      bot.pathfinder.setMovements(defaultMove);
-      bot.pathfinder.setGoal(
-        new GoalBlock(
-          Math.floor(x),
-          Math.floor(bot.entity.position.y),
-          Math.floor(z),
-        ),
-      );
-      angle += Math.PI / 4;
-      botState.lastActivity = Date.now();
-    } catch (e) {
-      addLog("[CircleWalk] Error:", e.message);
-    }
-  }, config.movement["circle-walk"].speed);
-}
+    if (!bot || !botState.connected || !bot.entity) return;
 
+    try {
+      const origin = bot.entity.position;
+
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 1 + Math.random() * radius;
+
+      const x = Math.floor(origin.x + Math.cos(angle) * distance);
+      const y = Math.floor(origin.y);
+      const z = Math.floor(origin.z + Math.sin(angle) * distance);
+
+      bot.pathfinder.setMovements(defaultMove);
+
+      bot.pathfinder.setGoal(
+        new GoalNear(x, y, z, 1)
+      );
+
+      botState.lastActivity = Date.now();
+
+      addLog(
+        `[Movement] Walking toward ${x}, ${y}, ${z}`
+      );
+
+    } catch (e) {
+      addLog(`[Movement] Error: ${e.message}`);
+    }
+  }, interval);
+}
 function startRandomJump(bot) {
   addInterval(() => {
     if (
